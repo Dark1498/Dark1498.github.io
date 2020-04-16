@@ -34,17 +34,6 @@
 
 
 <!-- ********** -->
-<!-- Double Click -->
-<!-- id : doubleclick -->
-<!-- ********** -->
-
-  <plugin name="doubleclick" url.flash="%FIRSTXML%/graphics/doubleclick/fieldofview_dc.swf" url.html5="%FIRSTXML%/graphics/doubleclick/dctouch.min.js" keep="true" ondblclick="doubleclick_ondoubleclick();"/>
-  <action name="doubleclick_ondoubleclick">switchFullscreen();
-
-
-  </action>
-
-<!-- ********** -->
 <!-- Context menu -->
 <!-- id : contextmenu -->
 <!-- ********** -->
@@ -109,15 +98,12 @@
 
 
 <plugin name="gyroscope"
-        url="%FIRSTXML%/graphics/gyro2.js"
+        url="%FIRSTXML%/graphics/gyro.js"
         keep="true"
         devices="no-desktop.and.html5"
 
-        onunavailable="checkGyroUnavailable();"
-        sensor_mode="1"
-        friction="auto"
-        autocalibration="true"
-        touch_mode="full"
+
+        friction="0.5"
         onavailable="delayedcall(1, checkGyroAvailability(););"
         enabled="false"
         activated="false"
@@ -127,6 +113,14 @@
 
 <action name="planarGyroscopeTest">
   if(plugin[gyroscope],
+    ifnot (plugin[gyroscope].available === undefined,
+      if (plugin[gyroscope].available,
+        if(scene[get(xml.scene)].planar,
+          if(plugin[gyroscope].enabled,
+            switch(plugin[gyroscope].enabled);
+            if (plugin[gyroscope].enabled, events.dispatch(ongyroscopeon);, events.dispatch(ongyroscopeoff););
+          );
+        ,
           if(scene[get(xml.scene)].full360,
             set(sceneisfull360, false);
             sub(viewhfov, panoview.hmax, panoview.hmin);
@@ -144,12 +138,23 @@
           ,
             set(plugin[gyroscope].camroll, false);
           );
+          if(plugin[gyroscope].activated,
+            ifnot(plugin[gyroscope].enabled,
+              switch(plugin[gyroscope].enabled);
+              if (plugin[gyroscope].enabled, events.dispatch(ongyroscopeon);, events.dispatch(ongyroscopeoff););
+            );
+          );
+        );
+
+      );
+    );
   );
 </action>
 
 <action name="changeGyroscopeState">
   if(plugin[gyroscope],
-    if (plugin[gyroscope].isavailable,
+    ifnot (plugin[gyroscope].available === undefined,
+      if (plugin[gyroscope].available,
         if(%1,
           set(plugin[gyroscope].activated,true);
         ,
@@ -163,22 +168,27 @@
           );
           if (plugin[gyroscope].enabled, events.dispatch(ongyroscopeon);, events.dispatch(ongyroscopeoff););
         );
+      );
     );
   );
 </action>
 
 <action name="checkGyroAvailability">
   if(plugin[gyroscope],
-    if (plugin[gyroscope].isavailable,
+    ifnot (plugin[gyroscope].available === undefined, 
+      if (plugin[gyroscope].available,
       ifnot(tour_firstlittleplanet,
-        
+        ifnot(scene[get(xml.scene)].planar,
         switch(plugin[gyroscope].enabled);
         set(plugin[gyroscope].activated,true);
-        
+        );
         set(tour_gyroscopedevices, true);
         events.dispatch(ongyroscopeavailable);
       ,
         delayedcall(1, checkGyroAvailability(););
+      );
+      ,
+        set(tour_gyroscopedevices, false);
       );
     ,
       set(tour_gyroscopedevices, false);
@@ -189,12 +199,6 @@
   );
 </action>
 
-<action name="checkGyroUnavailable">
-  set(plugin[gyroscope].activated, false);
-  set(plugin[gyroscope].enabled, false);
-  set(tour_gyroscopedevices, false);
-  events.dispatch(ongyroscopeunavailable);
-</action>
 
 <!-- ********** -->
 <!-- iControl Bar -->
@@ -235,7 +239,7 @@
   <layer name="controlBar_i_menu_bg"
          keep="true"
          type="container"
-         zorder="4"
+         zorder="3"
          width="40"
          height="40"
          align="bottom"
@@ -892,7 +896,7 @@ if (device.desktop,
          alturl="%FIRSTXML%/graphics/combobox.js"
          keep="true"
          visible="false"
-         zorder="5"
+         zorder="4"
          align="topleft"
          x="5" y="10"
          rowcount="10"
@@ -1021,6 +1025,46 @@ if (device.desktop,
   </action>
 
 
+<action name="viewControlZoomIn">
+	if(%1,
+		if(%2,
+			if(%2 LT view.fovmin,
+				zoomto(get(view.fovmin));
+			,
+				if(%2 LT view.fov,
+					zoomto(%2);
+				);
+			);
+		,
+			set(fov_moveforce, -1);
+			delayedcall(0.1, viewControlZoomStop());
+		);
+	,
+		set(fov_moveforce, -1);
+	);
+</action>
+<action name="viewControlZoomOut">
+	if(%1,
+		if(%2,
+			if(%2 GT view.fovmax,
+				zoomto(get(view.fovmax));
+			,
+				if(%2 GT view.fov,
+					zoomto(%2);
+				);
+			);
+		,
+			set(fov_moveforce, +1);
+			delayedcall(0.1, viewControlZoomStop());
+		);
+	,
+		set(fov_moveforce, +1);
+	);
+</action>
+<action name="viewControlZoomStop">
+	set(fov_moveforce, 0);
+</action>
+
 <action name="viewControlMoveUp">
 	if(%1,
 		if(%2,
@@ -1121,6 +1165,80 @@ if (device.desktop,
 	set(vlookat_moveforce, 0);
 </action>
 
+  <!-- Hide / Show Controls -->
+  <action name="hideTourControls">set(tour_displaycontrols, false);events.dispatch(hidetourcontrols);</action>
+  <action name="showTourControls">set(tour_displaycontrols, true); events.dispatch(showtourcontrols);</action>
+
+
+  <action name="enableGyroscope">
+    changeGyroscopeState(true);
+  </action>
+  <action name="disableGyroscope">
+    changeGyroscopeState(false);
+  </action>
+
+
+<action name="setViewNormal">
+	stopSetViewTweens();
+	if(current_view_isflat === true,
+		setViewNonFlat(VFOV);
+	);
+	setViewNormalComplete();
+</action>
+
+<action name="setViewNormalComplete">
+	set(view.fisheyefovlink, 0.5);
+	set(view.fovmax, get(panoview.fovmax));
+	tween(view.architectural, 0.0, distance(1.0, 0.45));
+	tween(view.pannini, 0.0, distance(1.0, 0.45), easeOutQuad, if(panniniViewActivated,restoreViewFromPannini();););
+	tween(view.vlookat, get(panoview.v), distance(90, 0.45));
+	tween(view.fov, get(panoview.fov), distance(50, 0.45));
+	tween(view.fisheye, 0.0, distance(1.0, 0.45),
+		set(view.stereographic,false);
+	);
+</action>
+
+<krpano normalViewActivated="true" />
+<action name="stopSetViewTweens">
+	stoptween(view.fov);
+	stoptween(view.vlookat);
+	stoptween(view.fisheye);
+	stoptween(view.architectural);
+	stoptween(view.pannini);
+</action>
+
+  <!-- Fullscreen Management -->
+  <action name="exitFullScreen" devices="fullscreensupport">set(tour_fullscreen,false);set(fullscreen,false);</action>
+  <action name="enterFullScreen" devices="fullscreensupport">set(tour_fullscreen,true);set(fullscreen,true);</action>
+  <action name="switchFullScreen">if(tour_fullscreen,exitFullScreen();,enterFullScreen(););</action>
+
+  
+  <events name="krpanoExitFullscreenEvent"
+    onexitfullscreen="if(tour_fullscreen,exitFullScreenChangeEvent(););"
+    keep="true" />
+
+  <action name="exitFullScreenChangeEvent" devices="fullscreensupport">set(tour_fullscreen,false);events.dispatch(onexitfullscreen);</action>
+
+<action name="setViewArchitectural">
+	if(normalViewActivated,stopSetViewTweens(););
+	if(current_view_isflat === true,
+		setViewNonFlat(VFOV);
+	);
+	setViewArchitecturalComplete();
+</action>
+
+<action name="setViewArchitecturalComplete">
+	set(view.fovmax, get(panoview.fovmax));
+	set(view.fisheyefovlink, 0.5);
+	tween(view.architectural, 1.0, distance(1.0, 0.45));
+	tween(view.pannini, 0.0, distance(1.0, 0.45), easeOutQuad, if(panniniViewActivated,restoreViewFromPannini();););
+	tween(view.fisheye, 0.0, distance(1.0, 0.45), easeOutQuad, 
+		set(view.stereographic,false);
+		tween(view.vlookat, get(panoview.v), distance(90, 0.45));
+	);
+	tween(view.fov, get(panoview.fov), distance(50, 0.45));
+</action>
+
 	<!-- WebVR plugin for VR availability tests -->
 
 	<plugin name="ptpvrmode" devices="html5" keep="true"
@@ -1148,34 +1266,6 @@ if (device.desktop,
 		set(tour_vrdevices, false);
 		events.dispatch(onvrunavailable);
 	</action>
-  <action name="enableGyroscope">
-    changeGyroscopeState(true);
-  </action>
-  <action name="disableGyroscope">
-    changeGyroscopeState(false);
-  </action>
-
-
-<action name="setViewArchitectural">
-	if(normalViewActivated,stopSetViewTweens(););
-	if(current_view_isflat === true,
-		setViewNonFlat(VFOV);
-	);
-	setViewArchitecturalComplete();
-</action>
-
-<action name="setViewArchitecturalComplete">
-	set(view.fovmax, get(panoview.fovmax));
-	set(view.fisheyefovlink, 0.5);
-	tween(view.architectural, 1.0, distance(1.0, 0.45));
-	tween(view.pannini, 0.0, distance(1.0, 0.45), easeOutQuad, if(panniniViewActivated,restoreViewFromPannini();););
-	tween(view.fisheye, 0.0, distance(1.0, 0.45), easeOutQuad, 
-		set(view.stereographic,false);
-		tween(view.vlookat, get(panoview.v), distance(90, 0.45));
-	);
-	tween(view.fov, get(panoview.fov), distance(50, 0.45));
-</action>
-
 <action name="setViewLittlePlanet">
 	set(sceneisfull360, false);
 	if(scene[get(xml.scene)].full360,
@@ -1209,92 +1299,6 @@ if (device.desktop,
 	if(panoview.fovmax LE 150, set(view.fovmax, 150); , set(view.fovmax, get(panoview.fovmax)); );
 	tween(view.fisheye, 1.0, distance(1.0, 0.75));
 	tween(view.fov, 150, distance(179, 0.75));
-</action>
-
-  <!-- Fullscreen Management -->
-  <action name="exitFullScreen" devices="fullscreensupport">set(tour_fullscreen,false);set(fullscreen,false);</action>
-  <action name="enterFullScreen" devices="fullscreensupport">set(tour_fullscreen,true);set(fullscreen,true);</action>
-  <action name="switchFullScreen">if(tour_fullscreen,exitFullScreen();,enterFullScreen(););</action>
-
-  
-  <events name="krpanoExitFullscreenEvent"
-    onexitfullscreen="if(tour_fullscreen,exitFullScreenChangeEvent(););"
-    keep="true" />
-
-  <action name="exitFullScreenChangeEvent" devices="fullscreensupport">set(tour_fullscreen,false);events.dispatch(onexitfullscreen);</action>
-
-  <!-- Hide / Show Controls -->
-  <action name="hideTourControls">set(tour_displaycontrols, false);events.dispatch(hidetourcontrols);</action>
-  <action name="showTourControls">set(tour_displaycontrols, true); events.dispatch(showtourcontrols);</action>
-
-
-<action name="setViewNormal">
-	stopSetViewTweens();
-	if(current_view_isflat === true,
-		setViewNonFlat(VFOV);
-	);
-	setViewNormalComplete();
-</action>
-
-<action name="setViewNormalComplete">
-	set(view.fisheyefovlink, 0.5);
-	set(view.fovmax, get(panoview.fovmax));
-	tween(view.architectural, 0.0, distance(1.0, 0.45));
-	tween(view.pannini, 0.0, distance(1.0, 0.45), easeOutQuad, if(panniniViewActivated,restoreViewFromPannini();););
-	tween(view.vlookat, get(panoview.v), distance(90, 0.45));
-	tween(view.fov, get(panoview.fov), distance(50, 0.45));
-	tween(view.fisheye, 0.0, distance(1.0, 0.45),
-		set(view.stereographic,false);
-	);
-</action>
-
-<krpano normalViewActivated="true" />
-<action name="stopSetViewTweens">
-	stoptween(view.fov);
-	stoptween(view.vlookat);
-	stoptween(view.fisheye);
-	stoptween(view.architectural);
-	stoptween(view.pannini);
-</action>
-
-<action name="viewControlZoomIn">
-	if(%1,
-		if(%2,
-			if(%2 LT view.fovmin,
-				zoomto(get(view.fovmin));
-			,
-				if(%2 LT view.fov,
-					zoomto(%2);
-				);
-			);
-		,
-			set(fov_moveforce, -1);
-			delayedcall(0.1, viewControlZoomStop());
-		);
-	,
-		set(fov_moveforce, -1);
-	);
-</action>
-<action name="viewControlZoomOut">
-	if(%1,
-		if(%2,
-			if(%2 GT view.fovmax,
-				zoomto(get(view.fovmax));
-			,
-				if(%2 GT view.fov,
-					zoomto(%2);
-				);
-			);
-		,
-			set(fov_moveforce, +1);
-			delayedcall(0.1, viewControlZoomStop());
-		);
-	,
-		set(fov_moveforce, +1);
-	);
-</action>
-<action name="viewControlZoomStop">
-	set(fov_moveforce, 0);
 </action>
 
 </krpano>
