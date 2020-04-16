@@ -98,12 +98,15 @@
 
 
 <plugin name="gyroscope"
-        url="%FIRSTXML%/graphics/gyro.js"
+        url="%FIRSTXML%/graphics/gyro2.js"
         keep="true"
         devices="no-desktop.and.html5"
 
-
-        friction="0.5"
+        onunavailable="checkGyroUnavailable();"
+        sensor_mode="1"
+        friction="auto"
+        autocalibration="true"
+        touch_mode="full"
         onavailable="delayedcall(1, checkGyroAvailability(););"
         enabled="false"
         activated="false"
@@ -113,14 +116,6 @@
 
 <action name="planarGyroscopeTest">
   if(plugin[gyroscope],
-    ifnot (plugin[gyroscope].available === undefined,
-      if (plugin[gyroscope].available,
-        if(scene[get(xml.scene)].planar,
-          if(plugin[gyroscope].enabled,
-            switch(plugin[gyroscope].enabled);
-            if (plugin[gyroscope].enabled, events.dispatch(ongyroscopeon);, events.dispatch(ongyroscopeoff););
-          );
-        ,
           if(scene[get(xml.scene)].full360,
             set(sceneisfull360, false);
             sub(viewhfov, panoview.hmax, panoview.hmin);
@@ -138,23 +133,12 @@
           ,
             set(plugin[gyroscope].camroll, false);
           );
-          if(plugin[gyroscope].activated,
-            ifnot(plugin[gyroscope].enabled,
-              switch(plugin[gyroscope].enabled);
-              if (plugin[gyroscope].enabled, events.dispatch(ongyroscopeon);, events.dispatch(ongyroscopeoff););
-            );
-          );
-        );
-
-      );
-    );
   );
 </action>
 
 <action name="changeGyroscopeState">
   if(plugin[gyroscope],
-    ifnot (plugin[gyroscope].available === undefined,
-      if (plugin[gyroscope].available,
+    if (plugin[gyroscope].isavailable,
         if(%1,
           set(plugin[gyroscope].activated,true);
         ,
@@ -168,27 +152,22 @@
           );
           if (plugin[gyroscope].enabled, events.dispatch(ongyroscopeon);, events.dispatch(ongyroscopeoff););
         );
-      );
     );
   );
 </action>
 
 <action name="checkGyroAvailability">
   if(plugin[gyroscope],
-    ifnot (plugin[gyroscope].available === undefined, 
-      if (plugin[gyroscope].available,
+    if (plugin[gyroscope].isavailable,
       ifnot(tour_firstlittleplanet,
-        ifnot(scene[get(xml.scene)].planar,
+        
         switch(plugin[gyroscope].enabled);
         set(plugin[gyroscope].activated,true);
-        );
+        
         set(tour_gyroscopedevices, true);
         events.dispatch(ongyroscopeavailable);
       ,
         delayedcall(1, checkGyroAvailability(););
-      );
-      ,
-        set(tour_gyroscopedevices, false);
       );
     ,
       set(tour_gyroscopedevices, false);
@@ -199,6 +178,12 @@
   );
 </action>
 
+<action name="checkGyroUnavailable">
+  set(plugin[gyroscope].activated, false);
+  set(plugin[gyroscope].enabled, false);
+  set(tour_gyroscopedevices, false);
+  events.dispatch(ongyroscopeunavailable);
+</action>
 
 <!-- ********** -->
 <!-- iControl Bar -->
