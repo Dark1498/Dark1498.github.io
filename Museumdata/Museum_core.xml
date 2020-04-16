@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <krpano>
   <!-- Global variables used by actions and plugins -->
-  <krpano 
-        tour_soundson="true" 
-        tour_soundsvolume="100" 
+  <krpano
+        tour_soundson="true"
+        tour_soundsvolume="100"
         tour_autotourenabled="false"
         tour_autorotateenabled="false"
         tour_controlmodemousetype="moveto"
-        tour_controlmodetouchtype="drag2d"
+        tour_controlmodetouchtype="drag"
         tour_fullscreen="false"
         tour_displaymap="false"
         tour_displaythumbnails="true"
@@ -23,6 +23,9 @@
   <krpano projection_current_params="view.fisheyefovlink=0.5&amp;view.architectural=0.0&amp;view.pannini=0.0&amp;view.fisheye=0.0&amp;view.stereographic=false" />
 
 
+  <display autofullscreen="false" devices="android" />
+
+
   <krpano vrtourdevice.desktop="desktop" vrtourdevice.tablet="tablet" vrtourdevice.mobile="mobile" />
   <krpano vrtourdevicescale.desktop="1.0" vrtourdevicescale.tablet="1.0" vrtourdevicescale.mobile="2.0" />
   <action name="vrtourcurrentscale" autorun="preinit">
@@ -30,15 +33,15 @@
   </action>
 
   <!-- Control Mode Management -->
-  <control mousetype="moveto" touchtype="drag2d" />
-  <action name="setControlModeDragTo">setControlMode(drag2d);</action>
+  <control mouse="moveto" touch="drag" />
+  <action name="setControlModeDragTo">setControlMode(drag);</action>
   <action name="setControlModeMoveTo">setControlMode(moveto);</action>
   <action name="setControlMode">
     if (device.desktop,
-      set(control.mousetype, %1);
+      set(control.mouse, %1);
       set(tour_controlmodemousetype, %1);
     ,
-      set(control.touchtype, %1);
+      set(control.touch, %1);
       set(tour_controlmodetouchtype, %1);
     );
     events.dispatch(oncontrolmodechanged);
@@ -77,12 +80,15 @@
 
 
   <action name="startbehavioursxmlcompleteaction">
-    events.dispatch(onPanoStart);
     ifnot (tour_firststartactiondone,
-      events.dispatch(onTourStart);
       set(tour_firststartactiondone, true);
+      events.dispatch(onTourStart);
     );
+    events.dispatch(onPanoStart);
   </action>
+
+
+
 
 
 
@@ -97,52 +103,40 @@
 
   <krpano ptblendmode="BLEND(1.0, easeInCubic)" />
   <action name="mainloadsceneStartup">
-    loadscene(%1, get(projection_current_params), MERGE, get(ptblendmode));
+    loadscene(%1, get(projection_current_params), MERGE);
   </action>
   <action name="mainloadscene">
     if (xml.scene != %1,
-      if(device.ios AND scene[get(xml.scene)].haspolygons,
-        removepanopolygonalspots();wait(0.1);
-      );
+      events.dispatch(onleavingscene, true);
+
       interruptAnimation();
 
 
       
+
+
       loadscene(%1, get(projection_current_params), MERGE, get(ptblendmode));
+
+
+
 
     );
   </action>
 
   <!-- Load Previous Scene -->
   <action name="loadPreviousScene">
-    if (%1 != findscene, sub(sceneprevnexti, scene.count, 1));
-    copy(scenenamei, scene[get(sceneprevnexti)].name);
+    copy(sceneprevnexti, scene[get(xml.scene)].index);
     dec(sceneprevnexti);
-    if (scenenamei == xml.scene,
-      if (sceneprevnexti GE 0,
-        mainloadscene(get(scene[get(sceneprevnexti)].name));
-       ,
-        sub(lasti, scene.count, 1);
-        mainloadscene(get(scene[get(lasti)].name));
-      );
-     ,
-      if(sceneprevnexti GE 0, loadPreviousScene(findscene));
-    );
+    if (sceneprevnexti LT 0, sub(sceneprevnexti, scene.count, 1););
+    mainloadscene(get(scene[get(sceneprevnexti)].name));
   </action>
 
   <!-- Load Next Scene -->
   <action name="loadNextScene">
-    if (%1 != findscene, set(sceneprevnexti,0));
-    copy(scenenamei, scene[get(sceneprevnexti)].name);
+    copy(sceneprevnexti, scene[get(xml.scene)].index);
     inc(sceneprevnexti);
-    if (scenenamei == xml.scene,
-      if (sceneprevnexti LT scene.count,
-        mainloadscene(get(scene[get(sceneprevnexti)].name));
-       ,
-        mainloadscene(get(scene[0].name)); );
-     ,
-      if(sceneprevnexti LT scene.count, loadNextScene(findscene));
-    );
+    if (sceneprevnexti GE scene.count, set(sceneprevnexti, 0););
+    mainloadscene(get(scene[get(sceneprevnexti)].name));
   </action>
 
 
@@ -265,7 +259,7 @@ startautorotation();
       delayedcall(autotour_call_id, get(autotourdelay), autotourtimer);
     ,
       set(autotourHorizontalStartValue, get(view.hlookat));
-      if (scene[get(xml.scene)].full360,
+      if ((panoview.hmin == -180) AND (panoview.hmax == 180),
         delayedcallAutotourFull360();
       ,
         set(previousStep, 0);
@@ -419,7 +413,7 @@ stopautorotation();
   <action name="interruptAnimation">
     if(tour_stopsequence == false,
       set(tour_stopsequence, true);
-      wait(0.1);
+
     );
   </action>
 
@@ -428,6 +422,7 @@ stopautorotation();
 
   <!-- Tooltips management -->
 <!-- Tooltip Management -->
+
 <krpano tooltipCurrentTextfieldLayer="panotourTooltipDefaultText" coretooltipmess=""/>
 
 <events name="showHideTooltipEvents" onremovepano="hideTooltip();" keep="true" />
@@ -440,22 +435,24 @@ stopautorotation();
 	,
 		set(tooltipCurrentTextfieldLayer, %2);
 	);
+
 	ifnot (currentTooltipText == "",
 
 		tooltipTextSettingsUpdate(%1, %3, %4, %5, %6);
-		
+
 		set(tooltipHtmlText, get(currentTooltipText));
 		escape(tooltipHtmlText);
 		set(layer[get(tooltipCurrentTextfieldLayer)].html, get(tooltipHtmlText));
 		set(layer[get(tooltipCurrentTextfieldLayer)].visible, true);
-		
+		set(layer[get(tooltipCurrentTextfieldLayer)].tag, "tooltip");
+
 		div(halfWidth, get(layer[get(tooltipCurrentTextfieldLayer)].width), 2);
 		div(halfHeight, get(layer[get(tooltipCurrentTextfieldLayer)].height), 2);
-		
+
 		<!-- Default edge center -->
 		set(usedWidth, get(halfWidth));
 		set(usedHeight, get(halfHeight));
-		
+
 		if(layer[get(tooltipCurrentTextfieldLayer)].edge == "left",
 			set(usedWidth, get(layer[get(tooltipCurrentTextfieldLayer)].width));
 			add(rightMargin, get(mouse.x), get(usedWidth));
@@ -470,10 +467,10 @@ stopautorotation();
 				sub(leftMargin, get(mouse.x), get(usedWidth));
 			);
 		);
-		
+
 		add(rightMargin, get(layer[get(tooltipCurrentTextfieldLayer)].xoffset));
 		add(leftMargin, get(layer[get(tooltipCurrentTextfieldLayer)].xoffset));
-		
+
 		if(layer[get(tooltipCurrentTextfieldLayer)].edge == "bottom",
 			set(usedHeight, get(layer[get(tooltipCurrentTextfieldLayer)].height));
 			sub(topMargin, get(mouse.y), get(usedHeight));
@@ -488,10 +485,10 @@ stopautorotation();
 				add(bottomMargin, get(mouse.y), get(usedHeight));
 			);
 		);
-		
+
 		add(topMargin, get(layer[get(tooltipCurrentTextfieldLayer)].yoffset));
 		add(bottomMargin, get(layer[get(tooltipCurrentTextfieldLayer)].yoffset));
-		
+
 		if(leftMargin LT 0,
 			set(layer[get(tooltipCurrentTextfieldLayer)].align, "left");
 			set(tooltipPositionX, get(usedWidth));
@@ -499,7 +496,7 @@ stopautorotation();
 			set(tooltipstagewidth, get(stagewidth));
 			if(area.left, sub(tooltipstagewidth, get(area.left)));
 			if(area.right, sub(tooltipstagewidth, get(area.right)));
-			
+
 			if(rightMargin GT tooltipstagewidth,
 				set(layer[get(tooltipCurrentTextfieldLayer)].align, "right");
 				set(tooltipPositionX, get(usedWidth));
@@ -509,9 +506,9 @@ stopautorotation();
 				add(tooltipPositionX, get(layer[get(tooltipCurrentTextfieldLayer)].xoffset));
 			);
 		);
-		
+
 		set(layer[get(tooltipCurrentTextfieldLayer)].x, get(tooltipPositionX));
-		
+
 		if(topMargin LT 0,
 			if(layer[get(tooltipCurrentTextfieldLayer)].align == "center",
 				set(layer[get(tooltipCurrentTextfieldLayer)].align, "top");
@@ -523,7 +520,7 @@ stopautorotation();
 			set(tooltipstageheight, get(stageheight));
 			if(area.top, sub(tooltipstageheight, get(area.top)));
 			if(area.bottom, sub(tooltipstageheight, get(area.bottom)));
-			
+
 			if(bottomMargin GT tooltipstageheight,
 				if(layer[get(tooltipCurrentTextfieldLayer)].align == "center",
 					set(layer[get(tooltipCurrentTextfieldLayer)].align, "bottom");
@@ -537,14 +534,10 @@ stopautorotation();
 				add(tooltipPositionY, get(layer[get(tooltipCurrentTextfieldLayer)].yoffset));
 			);
 		);
-		
+
 		set(layer[get(tooltipCurrentTextfieldLayer)].y, get(tooltipPositionY));
 	);
   );
-</action>
-<action name="hideTooltip">
-	set(layer[get(tooltipCurrentTextfieldLayer)].visible, false);
-	set(layer[get(tooltipCurrentTextfieldLayer)].html, '');
 </action>
 
 <action name="tooltipTextSettingsUpdate">
@@ -557,7 +550,6 @@ stopautorotation();
 			set(layer[get(tooltipCurrentTextfieldLayer)].edge, %2);
 		);
 		if (%3 != null,
-			set(layer[get(tooltipCurrentTextfieldLayer)].autowidth, false);
 			set(layer[get(tooltipCurrentTextfieldLayer)].wordwrap, true);
 			set(layer[get(tooltipCurrentTextfieldLayer)].width, %3);
 		);
@@ -569,6 +561,11 @@ stopautorotation();
 		);
 		set(layer[get(tooltipCurrentTextfieldLayer)].zorder, 99);
 	);
+</action>
+
+<action name="hideTooltip">
+	set(layer[get(tooltipCurrentTextfieldLayer)].visible, false);
+	set(layer[get(tooltipCurrentTextfieldLayer)].html, '');
 </action>
 
 <action name="showPermanentTooltip">
@@ -592,54 +589,67 @@ stopautorotation();
 			);
 			if(activateUsePermanentTooltip,
 				addlayer(get(permanentTooltipForSpot));
-				txtadd(plugin[get(permanentTooltipForSpot)].parent, 'hotspot[', get(name), ']');
-				if (%2 == null,
-					if(rotate,
-						sub(newRotate, 0, get(rotate));
-						if(rotate GE 0 AND rotate LT 45 OR rotate GE 315 AND rotate LT 360,
-							set(plugin[get(permanentTooltipForSpot)].rotate,get(newRotate));
-							set(plugin[get(permanentTooltipForSpot)].align,bottom);
+				txtadd(layer[get(permanentTooltipForSpot)].parent, 'hotspot[', get(name), ']');
+				if(rotate,
+					sub(newRotate, 0, get(rotate));
+					if(rotate GE 0 AND rotate LT 45 OR rotate GE 315 AND rotate LT 360,
+						set(layer[get(permanentTooltipForSpot)].rotate,get(newRotate));
+						if (%2 == null,
+							set(layer[get(permanentTooltipForSpot)].align,bottom);
 						,
-							if(rotate GE 45 AND rotate LT 135,
-								set(plugin[get(permanentTooltipForSpot)].rotate,get(newRotate));
-								set(plugin[get(permanentTooltipForSpot)].align,right);
+							set(layer[get(permanentTooltipForSpot)].align,top);
+						);
+					,
+						if(rotate GE 45 AND rotate LT 135,
+							set(layer[get(permanentTooltipForSpot)].rotate,get(newRotate));
+							if (%2 == null,
+								set(layer[get(permanentTooltipForSpot)].align,right);
 							,
-								if(rotate GE 135 AND rotate LT 225,
-									set(plugin[get(permanentTooltipForSpot)].rotate,get(newRotate));
-									set(plugin[get(permanentTooltipForSpot)].align,top);
+								set(layer[get(permanentTooltipForSpot)].align,left);
+							);
+						,
+							if(rotate GE 135 AND rotate LT 225,
+								set(layer[get(permanentTooltipForSpot)].rotate,get(newRotate));
+								if (%2 == null,
+									set(layer[get(permanentTooltipForSpot)].align,top);
 								,
-									set(plugin[get(permanentTooltipForSpot)].rotate,get(newRotate));
-									set(plugin[get(permanentTooltipForSpot)].align,left);
+									set(layer[get(permanentTooltipForSpot)].align,bottom);
+								);
+							,
+								set(layer[get(permanentTooltipForSpot)].rotate,get(newRotate));
+								if (%2 == null,
+									set(layer[get(permanentTooltipForSpot)].align,left);
+								,
+									set(layer[get(permanentTooltipForSpot)].align,right);
 								);
 							);
 						);
-					,
-						set(plugin[get(permanentTooltipForSpot)].align,bottom);
 					);
-					set(plugin[get(permanentTooltipForSpot)].edge,top);
 				,
-
-					set(plugin[get(permanentTooltipForSpot)].align,%2);
-					set(plugin[get(permanentTooltipForSpot)].edge,%3);
+					if (%2 == null,
+						set(layer[get(permanentTooltipForSpot)].align,bottom);
+					,
+						set(layer[get(permanentTooltipForSpot)].align,top);
+					);
 				);
-				set(plugin[get(permanentTooltipForSpot)].enabled,false);
-				set(plugin[get(permanentTooltipForSpot)].capture,false);
+				if (%2 == null,
+					set(layer[get(permanentTooltipForSpot)].edge,top);
+				,
+					set(layer[get(permanentTooltipForSpot)].edge,bottom);
+				);
+				set(layer[get(permanentTooltipForSpot)].enabled,false);
+				set(layer[get(permanentTooltipForSpot)].capture,false);
 				set(layer[get(permanentTooltipForSpot)].visible, true);
-			
-				set(plugin[get(permanentTooltipForSpot)].url,'%FIRSTXML%/graphics/textfield.swf');
-				set(plugin[get(permanentTooltipForSpot)].background,false);
-				set(plugin[get(permanentTooltipForSpot)].border,false);
-				set(plugin[get(permanentTooltipForSpot)].textshadow,1);
-				set(plugin[get(permanentTooltipForSpot)].textshadowrange,4.0);
-				set(plugin[get(permanentTooltipForSpot)].textshadowangle,45);
-				set(plugin[get(permanentTooltipForSpot)].textshadowcolor,0x000000);
-				set(plugin[get(permanentTooltipForSpot)].textshadowalpha,1);
-				set(plugin[get(permanentTooltipForSpot)].css,'color:#ffffff;font-family:Arial;font-weight:bold;font-size:14px;text-align:center;');
-				set(plugin[get(permanentTooltipForSpot)].height,20);
-				set(plugin[get(permanentTooltipForSpot)].autoheight,true);
-				set(plugin[get(permanentTooltipForSpot)].selectable,false);
-				set(plugin[get(permanentTooltipForSpot)].zorder,0);
-				set(plugin[get(permanentTooltipForSpot)].padding,2);
+				set(layer[get(permanentTooltipForSpot)].tag,"tooltip");
+
+				set(layer[get(permanentTooltipForSpot)].type,text);
+				set(layer[get(permanentTooltipForSpot)].bg,false);
+				set(layer[get(permanentTooltipForSpot)].bgborder,0);
+				set(layer[get(permanentTooltipForSpot)].txtshadow,'1.0 1.0 4.0 0x000000 1');
+				set(layer[get(permanentTooltipForSpot)].css,'color:#ffffff;font-family:Arial;font-weight:bold;font-size:14px;text-align:center;');
+				set(layer[get(permanentTooltipForSpot)].interactivecontent, false);
+				set(layer[get(permanentTooltipForSpot)].zorder,3);
+				set(layer[get(permanentTooltipForSpot)].padding,2);
 
 				set(tooltipHtmlText, get(currentTooltipText));
 				escape(tooltipHtmlText);
@@ -667,25 +677,24 @@ stopautorotation();
 
 
 <!-- Default HTML5 tooltip style -->
+
 <layer name="panotourTooltipDefaultText"
 	keep="true"
 	enabled="false"
 	capture="false"
-	url="%FIRSTXML%/graphics/textfield.swf"
+	type="text"
 	align="center"
-	background="false"
-	border="false"
-	textshadow="1" textshadowrange="4.0" textshadowangle="45" textshadowcolor="0x000000" textshadowalpha="1"
+	bg="false"
+	bgborder="0"
+	txtshadow="1.0 1.0 4.0 0x000000 1"
 	css="color:#ffffff;font-family:Arial;font-weight:bold;font-size:14px;text-align:left;"
-	height="20" 
-	autoheight="true"
-	autowidth="auto"
 	edge="bottom"
-	selectable="false"
 	zorder="0"
-	padding="2"
 	xoffset="0"
 	yoffset="0"
+	interactivecontent="false"
+	wordwrap="true"
+	padding="2"
 	visible="false"
 	html=""
 />
@@ -695,7 +704,7 @@ stopautorotation();
 
 
 
-  <!-- Keyboard management 
+  <!-- Keyboard management
   * use the keyboard +/- keys to zoom in/out
   * use the keyboard CTRL+0 keys to reset the default panorama view
   -->
@@ -707,10 +716,16 @@ stopautorotation();
 
   <!-- Indicate if a scene is seen or not - dispatch an event if the state is changed -->
   <events name="sceneSeenEvents" onnewpano="changeSeenState" keep="true"/>
+  <krpano tour_nbseenscenes="0"/>
   <action name="changeSeenState">
     ifnot (scene[get(xml.scene)].seen,
       set(scene[get(xml.scene)].seen, true);
       events.dispatch(onSeenStateChanged);
+
+      inc(tour_nbseenscenes);
+      if (tour_nbseenscenes == scene.count,
+        events.dispatch(onallsceneseen);
+      );
     );
   </action>
 
@@ -719,7 +734,7 @@ stopautorotation();
   <cursors standard="" dragging="" moving="" />
   <events name="cursorsEvents" onnewpano="setCursor" oncontrolmodechanged="setCursor" keep="true" devices="desktop" />
   <action name="setCursor">
-    if (tour_controlmodemousetype == moveto, 
+    if (tour_controlmodemousetype == moveto,
       setarrowcursors();
      ,
       sethandcursors();
@@ -730,7 +745,7 @@ stopautorotation();
   <action name="setarrowcursors">
     if (device.flash,
       ifnot(device.mac,
-        set(cursors.url  , %FIRSTXML%/graphics/cursors_move.png); 
+        set(cursors.url  , %FIRSTXML%/graphics/cursors_move.png);
         set(cursors.type , 8way);
         set(cursors.move    ,   0|0|16|16);
         set(cursors.drag    ,  16|0|16|16);
